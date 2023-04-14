@@ -36,6 +36,7 @@ interface Cycle {
     minutesAmount: number;
     startDate: Date;
     interruptedDate?: Date;
+    finishedDate?: Date;
 }
 
 export function Home() {
@@ -47,6 +48,7 @@ export function Home() {
 
     // Encontrar qual ciclo está ativo
     const activeCycle = cycles.find((cycle) => cycle.id === activeCycleId);
+    const totalCycles = activeCycle ? activeCycle.minutesAmount * 60 : 0;
 
     // React hook form
     const { register, handleSubmit, watch, reset } = useForm<NewCycleFormData>({
@@ -66,7 +68,27 @@ export function Home() {
 
             interval = setInterval(() => {
 
-                setAmountSecondsPassed(differenceInSeconds(new Date(), activeCycle.startDate))
+                const secondsDifference = differenceInSeconds(new Date(), activeCycle.startDate);
+
+                if(secondsDifference >= totalCycles) {
+
+                    setCycles(state => state.map((cycle) => {
+
+                        if(cycle.id === activeCycleId) {
+            
+                            return { ...cycle, finishedDate: new Date() }
+            
+                        } else {
+                            return cycle;
+                        }
+                    }))
+
+                    setAmountSecondsPassed(totalCycles);
+                    clearInterval(interval);
+                } else {
+
+                    setAmountSecondsPassed(secondsDifference);
+                }
 
             }, 1000)
         }
@@ -77,7 +99,7 @@ export function Home() {
             clearInterval(interval);
         }
 
-    }, [activeCycle])
+    }, [activeCycle, totalCycles, activeCycleId])
 
     function handleCreateNewCycle(data: NewCycleFormData) {
 
@@ -115,7 +137,6 @@ export function Home() {
         setActiveCycleId(null);
     }
 
-    const totalCycles = activeCycle ? activeCycle.minutesAmount * 60 : 0;
     const currentSeconds = activeCycle ? totalCycles - amountSecondsPassed : 0;
 
     // Minutos e segundos atualizados
