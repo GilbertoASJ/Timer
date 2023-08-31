@@ -1,7 +1,7 @@
 // Imports
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { HandPalm, Play } from 'phosphor-react';
-import { useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { differenceInSeconds } from 'date-fns';
 
@@ -15,6 +15,7 @@ import {
 
 import { NewCycleForm } from './components/NewCycleForm/NewCycleForm';
 import { Countdown } from './components/Countdown/Countdown';
+import { CyclesContext } from '../../contexts/CyclesContext';
 
 // Schema
 const newCycleFormValidationSchema = zod.object({
@@ -28,28 +29,12 @@ const newCycleFormValidationSchema = zod.object({
 // Tipagens
 type NewCycleFormData = zod.infer<typeof newCycleFormValidationSchema>
 
-interface Cycle {
-    id: string;
-    task: string;
-    minutesAmount: number;
-    startDate: Date;
-    interruptedDate?: Date;
-    finishedDate?: Date;
-}
-
 export function Home() {
 
-    // States
-    const [cycles, setCycles] = useState<Cycle[]>([]);
-    const [activeCycleId, setActiveCycleId] = useState<string | null>(null);
-    const [amountSecondsPassed, setAmountSecondsPassed] = useState(0);
-
-    // Encontrar qual ciclo está ativo
-    const activeCycle = cycles.find((cycle) => cycle.id === activeCycleId);
-    const totalCycles = activeCycle ? activeCycle.minutesAmount * 60 : 0;
+    const { createNewCycle, interruptCurrentCycle, activeCycle } = useContext(CyclesContext)
 
     // React hook form
-    const { register, handleSubmit, watch, reset } = useForm<NewCycleFormData>({
+    const newCycleForm = useForm<NewCycleFormData>({
         resolver: zodResolver(newCycleFormValidationSchema),
         defaultValues: {
             task: '',
@@ -57,116 +42,32 @@ export function Home() {
         }
     });
 
-    // useEffect
-    useEffect(() => {
-
-        let interval: number;
-
-        if(activeCycle) {
-
-            interval = setInterval(() => {
-
-                const secondsDifference = differenceInSeconds(new Date(), activeCycle.startDate);
-
-                if(secondsDifference >= totalCycles) {
-
-                    setCycles(state => state.map((cycle) => {
-
-                        if(cycle.id === activeCycleId) {
-            
-                            return { ...cycle, finishedDate: new Date() }
-            
-                        } else {
-                            return cycle;
-                        }
-                    }))
-
-                    setAmountSecondsPassed(totalCycles);
-                    clearInterval(interval);
-                } else {
-
-                    setAmountSecondsPassed(secondsDifference);
-                }
-
-            }, 1000)
-        }
-
-        // Executar algo quando o useEffect for chamado novamente
-        return () => {
-
-            clearInterval(interval);
-        }
-
-    }, [activeCycle, totalCycles, activeCycleId])
+    const { handleSubmit, watch, reset } = newCycleForm;
 
     function handleCreateNewCycle(data: NewCycleFormData) {
-
-        const id = String(new Date().getDate());
-
-        const newCycle: Cycle = {
-            id,
-            task: data.task,
-            minutesAmount: data.minutesAmount,
-            startDate: new Date()
-        }
-
-        setCycles((state) => [...state, newCycle]);
-        setActiveCycleId(id);
-        setAmountSecondsPassed(0);
-
+        createNewCycle(data);
         reset();
-        console.log(data);
     }
-
-    // Interromper ciclo ativo
-    function handleInterruptCycle() {
-
-        setCycles(cycles.map((cycle) => {
-
-            if(cycle.id === activeCycleId) {
-
-                return { ...cycle, interruptedDate: new Date() }
-
-            } else {
-                return cycle;
-            }
-        }))
-
-        setActiveCycleId(null);
-    }
-
-    const currentSeconds = activeCycle ? totalCycles - amountSecondsPassed : 0;
-
-    // Minutos e segundos atualizados
-    const currentMinutes = Math.floor(currentSeconds / 60);
-    const secondsAmount = currentSeconds % 60;
-
-    const minutes = String(currentMinutes).padStart(2, '0');
-    const seconds = String(secondsAmount).padStart(2, '0');
-
-    useEffect(() => {
-
-        if(activeCycle) {
-            document.title = `Timer - ${minutes}:${seconds}`;
-        }
-
-    }, [minutes, seconds, activeCycle])
 
     const task = watch('task');
     const isSubmitDisabled = !task;
     
+    // Prop driling -> Muitas propriedades apenas para que ocorra a comunicação entre componentes
+    // Context API - Permite compartilhar informações entre vários componentes ao mesmo tempo
     return (
         <HomeContainer>
             <form onSubmit={handleSubmit(handleCreateNewCycle)}>
-                    
-                <NewCycleForm />
+
+                <FormProvider {...newCycleForm}>
+                    <NewCycleForm />
+                </FormProvider>
                 <Countdown />
 
                 {activeCycle ? (
 
                     <StopCountdownButton 
                         type="button"
-                        onClick={handleInterruptCycle}
+                        onClick={interruptCurrentCycle}
                     >
                         <HandPalm size={24} />
                         Interromper
